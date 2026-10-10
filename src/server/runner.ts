@@ -2,6 +2,7 @@ import { Store } from './store.js';
 import type { Result, Memory } from '../shared/types.js';
 import type { Claim } from './store.js';
 import { research, type Config } from './research.js';
+import { TURN_TIME_LIMIT_MS } from './time-limit.js';
 export class Runner {
   private timer?: ReturnType<typeof setInterval>;
   private active = new Map<string, AbortController>();
@@ -68,9 +69,11 @@ export class Runner {
     const timeout = setTimeout(
       () =>
         controller.abort(
-          new Error('Research exceeded the 90 second time limit.'),
+          new Error(
+            `Research exceeded the ${TURN_TIME_LIMIT_MS / 1000} second time limit.`,
+          ),
         ),
-      90_000,
+      TURN_TIME_LIMIT_MS,
     );
     try {
       const settings = this.store.settings();

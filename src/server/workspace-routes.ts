@@ -16,6 +16,8 @@ const dotSchema = z
     memoryAllowed: z.boolean(),
     learningContainerId: learningContainerIdSchema.optional(),
     skillDeliveryEnabled: z.boolean().optional(),
+    model: z.string().trim().max(100).nullable().optional(),
+    reasoningEffort: z.enum(['low', 'medium', 'high']).nullable().optional(),
     spaceIds: z.array(z.string().min(1)).min(1).max(100).optional(),
     spaceId: z.string().min(1).optional(),
   })
@@ -94,16 +96,21 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         400,
       );
     }
+    const dot = platform.workspace.createDot(
+      data.data.spaceId,
+      data.data.name,
+      data.data.instructions,
+      data.data.researchAllowed,
+      data.data.memoryAllowed,
+      data.data.spaceIds,
+      data.data.learningContainerId,
+      data.data.skillDeliveryEnabled,
+    );
     return c.json(
-      platform.workspace.createDot(
-        data.data.spaceId,
-        data.data.name,
-        data.data.instructions,
-        data.data.researchAllowed,
-        data.data.memoryAllowed,
-        data.data.spaceIds,
-        data.data.learningContainerId,
-        data.data.skillDeliveryEnabled,
+      platform.workspace.setDotModel(
+        dot.id,
+        data.data.model ?? null,
+        data.data.reasoningEffort ?? null,
       ),
       201,
     );
@@ -132,7 +139,17 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         400,
       );
     }
-    return c.json(platform.workspace.updateDot(c.req.param('id'), data.data));
+    const { model, reasoningEffort, ...patch } = data.data;
+    const dot = platform.workspace.updateDot(c.req.param('id'), patch);
+    return c.json(
+      platform.workspace.setDotModel(
+        dot.id,
+        model === undefined ? (current.model ?? null) : model,
+        reasoningEffort === undefined
+          ? (current.reasoningEffort ?? null)
+          : reasoningEffort,
+      ),
+    );
   });
   app.post('/conversations', async (c) => {
     const data = z

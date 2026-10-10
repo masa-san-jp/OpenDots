@@ -6,7 +6,14 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateLearningSettings } from '../shared/learning.js';
-import type { CallReceipt, Conversation, Dot, Space } from '../shared/types.js';
+import type {
+  CallReceipt,
+  Conversation,
+  Dot,
+  Handoff,
+  ReasoningEffort,
+  Space,
+} from '../shared/types.js';
 export class WorkspaceStore {
   private db: DatabaseSync;
   readonly pages: Pages;
@@ -24,10 +31,13 @@ export class WorkspaceStore {
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);
-      CREATE TABLE IF NOT EXISTS captures(threadId TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS captures(threadId TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS handoffs(id TEXT PRIMARY KEY, taskId TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, parentId TEXT, fromDotId TEXT NOT NULL, fromThreadId TEXT NOT NULL, toDotId TEXT NOT NULL, toThreadId TEXT NOT NULL, depth INTEGER NOT NULL, task TEXT NOT NULL, status TEXT NOT NULL, createdAt INTEGER NOT NULL, finishedAt INTEGER);`);
     for (const [table, column, definition] of [
       ['dots', 'learningContainerId', 'TEXT'],
       ['dots', 'skillDeliveryEnabled', 'INTEGER NOT NULL DEFAULT 0'],
+      ['dots', 'model', 'TEXT'],
+      ['dots', 'reasoningEffort', 'TEXT'],
       ['thread_bindings', 'learningContainerId', 'TEXT'],
     ]) {
       if (
@@ -231,6 +241,17 @@ export class WorkspaceStore {
     }
     return this.dot(id)!;
   }
+  setDotModel(
+    id: string,
+    model: string | null,
+    reasoningEffort: ReasoningEffort | null,
+  ): Dot {
+    if (!this.dot(id)) throw new Error('Dot not found.');
+    this.db
+      .prepare('UPDATE dots SET model=?, reasoningEffort=? WHERE id=?')
+      .run(model || null, reasoningEffort, id);
+    return this.dot(id)!;
+  }
   conversations(): Conversation[] {
     return this.db
       .prepare(
@@ -280,6 +301,52 @@ export class WorkspaceStore {
       .prepare('SELECT threadId FROM task_threads WHERE taskId=?')
       .get(taskId);
     return typeof row?.threadId === 'string' ? row.threadId : undefined;
+  }
+  recordHandoff(handoff: Omit<Handoff, 'status' | 'createdAt' | 'finishedAt'>) {
+    this.db
+      .prepare(
+        "INSERT INTO handoffs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, NULL)",
+      )
+      .run(
+        handoff.id,
+        handoff.taskId,
+        handoff.kind,
+        handoff.parentId,
+        handoff.fromDotId,
+        handoff.fromThreadId,
+        handoff.toDotId,
+        handoff.toThreadId,
+        handoff.depth,
+        handoff.task,
+        Date.now(),
+      );
+  }
+  handoffForTask(taskId: string): Handoff | undefined {
+    return this.db
+      .prepare('SELECT * FROM handoffs WHERE taskId=?')
+      .get(taskId) as unknown as Handoff | undefined;
+  }
+  finishHandoff(id: string, status: 'completed' | 'failed') {
+    this.db
+      .prepare('UPDATE handoffs SET status=?, finishedAt=? WHERE id=?')
+      .run(status, Date.now(), id);
+  }
+  // A thread created by a handoff inherits its depth; owner threads are 0.
+  handoffDepth(threadId: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT depth FROM handoffs WHERE toThreadId=? AND kind='request'",
+      )
+      .get(threadId);
+    return typeof row?.depth === 'number' ? row.depth : 0;
+  }
+  handoffCountFrom(threadId: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM handoffs WHERE fromThreadId=? AND kind='request'",
+      )
+      .get(threadId);
+    return Number(row?.count ?? 0);
   }
   calls(threadId?: string): CallReceipt[] {
     if (threadId) this.requireThread(threadId);

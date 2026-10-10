@@ -87,7 +87,11 @@ export interface Dot {
   createdAt: number;
   learningContainerId?: string | null;
   skillDeliveryEnabled?: boolean;
+  /** Overrides the server's OPENAI_MODEL for this Dot; null uses the default. */
+  model?: string | null;
+  reasoningEffort?: ReasoningEffort | null;
 }
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 export interface Conversation {
   id: string;
   dotId: string;
@@ -96,6 +100,22 @@ export interface Conversation {
   createdAt: number;
   /** Frozen at creation; null means this conversation does not participate. */
   learningContainerId?: string | null;
+}
+/** Background work one Dot passes to another; a reply carries the result back. */
+export interface Handoff {
+  id: string;
+  taskId: string;
+  kind: 'request' | 'reply';
+  parentId: string | null;
+  fromDotId: string;
+  fromThreadId: string;
+  toDotId: string;
+  toThreadId: string;
+  depth: number;
+  task: string;
+  status: 'queued' | 'completed' | 'failed';
+  createdAt: number;
+  finishedAt: number | null;
 }
 export interface CallReceipt {
   anchorMessageId?: string | null;

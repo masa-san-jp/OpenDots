@@ -54,3 +54,21 @@ it('migrates legacy Space ownership once and never restores revoked access on re
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+it('stores a per-Dot model and reasoning effort, falling back to the server default when cleared', () => {
+  const store = new WorkspaceStore(':memory:', 'owner');
+  const dot = store.dots()[0];
+  expect(store.dot(dot.id)?.model ?? null).toBeNull();
+  store.setDotModel(dot.id, 'gpt-oss:120b', 'high');
+  expect(store.dot(dot.id)).toMatchObject({
+    model: 'gpt-oss:120b',
+    reasoningEffort: 'high',
+  });
+  store.setDotModel(dot.id, '', null);
+  expect(store.dot(dot.id)).toMatchObject({
+    model: null,
+    reasoningEffort: null,
+  });
+  expect(() => store.setDotModel('missing', null, null)).toThrow();
+  store.close();
+});

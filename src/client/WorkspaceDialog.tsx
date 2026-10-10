@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import type { Dot, Memory, State, WorkspaceState } from '../shared/types';
+import type {
+  Dot,
+  Memory,
+  ReasoningEffort,
+  State,
+  WorkspaceState,
+} from '../shared/types';
 import { ConnectionsSection } from './ConnectionsSection';
 import {
   setThemePreference,
@@ -58,6 +64,12 @@ export function WorkspaceDialog({
   );
   const [skillDelivery, setSkillDelivery] = useState(
     dialog.type === 'dot' ? (dialog.dot?.skillDeliveryEnabled ?? false) : false,
+  );
+  const [model, setModel] = useState(
+    dialog.type === 'dot' ? (dialog.dot?.model ?? '') : '',
+  );
+  const [effort, setEffort] = useState<ReasoningEffort | ''>(
+    dialog.type === 'dot' ? (dialog.dot?.reasoningEffort ?? '') : '',
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -149,6 +161,8 @@ export function WorkspaceDialog({
                 memoryAllowed: memory,
                 learningContainerId: learningContainer.trim() || null,
                 skillDeliveryEnabled: skillDelivery,
+                model: model.trim() || null,
+                reasoningEffort: effort || null,
               };
             }
             if (dialog.type === 'settings') {
@@ -216,6 +230,43 @@ export function WorkspaceDialog({
                 }
               />
             </>
+          )}
+          {dialog.type === 'dot' && (
+            <fieldset className="space-access-fields">
+              <legend>Model</legend>
+              <label className="field-label" htmlFor="dot-model">
+                Model
+              </label>
+              <input
+                id="dot-model"
+                value={model}
+                maxLength={100}
+                placeholder="Server default (OPENAI_MODEL)"
+                aria-describedby="model-help"
+                onChange={(event) => setModel(event.target.value)}
+              />
+              <label className="field-label" htmlFor="dot-effort">
+                Reasoning effort
+              </label>
+              <select
+                id="dot-effort"
+                value={effort}
+                aria-describedby="model-help"
+                onChange={(event) =>
+                  setEffort(event.target.value as ReasoningEffort | '')
+                }
+              >
+                <option value="">Server default</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+              <p className="muted" id="model-help">
+                Use a stronger reasoning model for Dots that judge and decide,
+                and a fast one for Dots that write. The model must be available
+                at the server&apos;s OPENAI_BASE_URL.
+              </p>
+            </fieldset>
           )}
           {dialog.type === 'dot' && (
             <fieldset className="space-access-fields">

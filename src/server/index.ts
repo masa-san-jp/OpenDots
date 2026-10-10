@@ -9,6 +9,7 @@ import { createApp } from './app.js';
 import { resolveAppOrigins } from './app-origin.js';
 import { WorkspaceStore } from './workspace.js';
 import { Platform } from './platform.js';
+import { completeHandoff } from './handoffs.js';
 import {
   intelligenceApiKeyFromEnv,
   intelligenceWsUrlFromEnv,
@@ -79,9 +80,20 @@ const runner = new Runner(
         'This legacy task has no Intelligence conversation. Create a new scheduled task from a conversation.',
       );
     progress('Running this task in its Intelligence conversation.');
-    const text = await platform.turn(threadId, claim.prompt, signal, {
-      opendotsSource: 'scheduled_task',
-    });
+    let text: string;
+    try {
+      text = await platform.turn(threadId, claim.prompt, signal, {
+        opendotsSource: 'scheduled_task',
+      });
+    } catch (error) {
+      // Tell the sending Dot, unless the owner stopped the run.
+      if (!signal.aborted)
+        completeHandoff(store, workspace, claim.id, {
+          error: error instanceof Error ? error.message : 'The run failed.',
+        });
+      throw error;
+    }
+    completeHandoff(store, workspace, claim.id, { text });
     return { text, sources: [], sample: false };
   },
 );

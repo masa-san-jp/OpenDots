@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { TASK_LEASE_MS } from './time-limit.js';
 import type {
   Action,
   Detail,
@@ -228,7 +229,7 @@ export class Store {
         .prepare(
           "UPDATE tasks SET status='running', lease=?, leaseUntil=?, nextRunAt=NULL, error=NULL, updatedAt=? WHERE id=?",
         )
-        .run(lease, now + 180_000, now, task.id);
+        .run(lease, now + TASK_LEASE_MS, now, task.id);
       this.db
         .prepare(
           "INSERT INTO runs VALUES (?, ?, 'running', ?, NULL, NULL, NULL)",
